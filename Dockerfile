@@ -1,59 +1,24 @@
-# new, original, mysql
-ARG kind=new
-
 # ----- build ----- #
 
-# https://stackoverflow.com/a/60820156
-FROM rust:1.81-alpine AS builder-base
-
-FROM builder-base AS builder-new
-ENV FEATURES=new
-
-FROM builder-base AS builder-original
-ENV FEATURES=original
-
-FROM builder-base AS builder-mysql
-ENV FEATURES=mysql
-
-FROM builder-${kind} AS builder
-
-# install even unnecessary deps for better caching
-# it doesn't help for github action, sad
-RUN apk add --no-cache musl-dev sqlite-static mariadb-dev
+FROM golang:1.16-alpine AS builder
 
 WORKDIR /app
-COPY Cargo.toml Cargo.lock /app/
 
-RUN mkdir src && touch src/lib.rs
+COPY go.mod go.sum ./
+RUN go mod download
 
-# https://github.com/rust-lang/rust/issues/115430
-ENV RUSTFLAGS="-Ctarget-feature=-crt-static"
-ENV BUILD_ARGS="--release --target=x86_64-unknown-linux-musl --no-default-features --features=${FEATURES}"
+COPY . .
 
-RUN cargo b ${BUILD_ARGS}
-
-COPY . /app
-
-RUN cargo b ${BUILD_ARGS}
+RUN go build -o main .
 
 # ----- result ----- #
 
-FROM alpine:3.20 AS run-base
+FROM alpine:3.13
 
-FROM run-base AS run-new
-ENV DEPS=sqlite-libs
-
-FROM run-base AS run-original
-ENV DEPS=mariadb-connector-c
-
-FROM run-base AS run-mysql
-ENV DEPS=mariadb-connector-c
-
-FROM run-${kind} AS run
-RUN apk add --no-cache libgcc ${DEPS}
-
-FROM run
-EXPOSE 8080:8080
 WORKDIR /app
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/kotync .
-ENTRYPOINT ["/app/kotync"]
+
+COPY --from=builder /app/main .
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/main"]

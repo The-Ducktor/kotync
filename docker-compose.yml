@@ -1,4 +1,21 @@
+version: '3.8'
+
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - SERVER_PORT=8080
+      - JWT_SECRET=your_jwt_secret
+      - JWT_ISSUER=your_jwt_issuer
+      - DB_DRIVER=mysql
+      - DB_DSN=user:password@tcp(test-db:3306)/kotatsu_db_test
+    ports:
+      - "8080:8080"
+    depends_on:
+      - test-db
+
   test-db:
     image: mariadb:lts
     environment:
